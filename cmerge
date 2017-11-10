@@ -1,0 +1,161 @@
+if [ ! -n "$1" ];then
+  echo '请指定项目名'
+  exit
+fi
+
+dir="$( cd "$( dirname "$0"  )" && pwd  )"
+dir=$dir/gitlab
+mkdir $dir >/dev/null 2>&1
+
+if [[ $1 = 'token' ]];then
+  if [ ! -n "$2" ];then
+    echo '请指定token'
+    exit
+  fi
+  echo $2 > $dir/gitlab_token
+  echo '保存token成功'
+  exit
+fi
+
+token=$(cat $dir/gitlab_token)
+if [[ $token = '' ]];then
+  echo 'token不存在, 请保存token'
+  exit
+fi
+
+throw () {
+  echo "$*" >&2
+  exit 1
+}
+ 
+tokenize () {
+  local ESCAPE='(\\[^u[:cntrl:]]|\\u[0-9a-fA-F]{4})'
+  local CHAR='[^[:cntrl:]"\\]'
+  local STRING="\"$CHAR*($ESCAPE$CHAR*)*\""
+  local NUMBER='-?(0|[1-9][0-9]*)([.][0-9]*)?([eE][+-]?[0-9]*)?'
+  local KEYWORD='null|false|true'
+  local SPACE='[[:space:]]+'
+  egrep -ao "$STRING|$NUMBER|$KEYWORD|$SPACE|." --color=never |
+    egrep -v "^$SPACE$"  # eat whitespace
+}
+ 
+parse_array () {
+  local index=0
+  local ary=''
+  read -r token
+  case "$token" in
+    ']') ;;
+    *)
+      while :
+      do
+        parse_value "$1" "$index"
+        let index=$index+1
+        ary="$ary""$value"
+        read -r token
+        case "$token" in
+          ']') break ;;
+          ',') ary="$ary," ;;
+          *) throw "EXPECTED , or ] GOT ${token:-EOF}" ;;
+        esac
+        read -r token
+      done
+      ;;
+  esac
+  value=`printf '[%s]' "$ary"`
+}
+ 
+parse_object () {
+  local key
+  local obj=''
+  read -r token
+  case "$token" in
+    '}') ;;
+    *)
+      while :
+      do
+        case "$token" in
+          '"'*'"') key=$token ;;
+          *) throw "EXPECTED string GOT ${token:-EOF}" ;;
+        esac
+        read -r token
+        case "$token" in
+          ':') ;;
+          *) throw "EXPECTED : GOT ${token:-EOF}" ;;
+        esac
+        read -r token
+        parse_value "$1" "$key"
+        obj="$obj$key:$value"       
+        read -r token
+        case "$token" in
+          '}') break ;;
+          ',') obj="$obj," ;;
+          *) throw "EXPECTED , or } GOT ${token:-EOF}" ;;
+        esac
+        read -r token
+      done
+    ;;
+  esac
+  value=`printf '{%s}' "$obj"`
+}
+ 
+parse_value () {
+  local jpath="${1:+$1,}$2"
+  case "$token" in
+    '{') parse_object "$jpath" ;;
+    '[') parse_array  "$jpath" ;;
+    # At this point, the only valid single-character tokens are digits.
+    ''|[^0-9]) throw "EXPECTED value GOT ${token:-EOF}" ;;
+    *) value=$token ;;
+  esac
+  printf "[%s]\t%s\n" "$jpath" "$value"
+}
+ 
+parse () {
+  read -r token
+  parse_value
+  read -r token
+  case "$token" in
+    '') ;;
+    *) throw "EXPECTED EOF GOT $token" ;;
+  esac
+}
+
+project_id=999
+curl "http://code.anlaa.com/api/v4/projects?private_token=$token&simple=1" -s | tokenize | parse > $dir/gitlab_projects
+while read line 
+do
+  if [[ "$line" =~ ^\[[0-9]+\,\"id\"\][[:space:]]([0-9]+)$ ]];then
+    let project_id=${BASH_REMATCH[1]}
+  fi
+  if [[ "$line" =~ ^\[[0-9]+\,\"name\"\][[:space:]]\"([a-z]+)\"$ ]];then
+    if [[ ${BASH_REMATCH[1]} = $1 ]];then
+      break
+    fi
+  fi
+  #echo $line | awk '{print $1}' | sed -e 's/"//g'
+done < $dir/gitlab_projects
+
+title=$2
+if [ ! -n "$2" ];then
+  title=$(git config user.name)
+fi
+
+url="http://code.anlaa.com/api/v4/projects/$project_id/merge_requests?private_token=$token"
+curl -i -X POST -H "'Content-type':'application/json'" -s -o $dir/gitlab__cmerge_result -d  "title=$title&target_branch=pro&source_branch=release&assignee_id=1" $url
+if [[ $? != 0 ]];then
+  echo '提交失败, 请重试'
+  exit
+fi
+
+result=$(cat $dir/gitlab__cmerge_result)
+if [[ "$result" =~ \"project_id\"\:([0-9]+)\, ]];then
+  if [[ ${BASH_REMATCH[1]} = $project_id ]];then
+    echo '提交成功!'
+    exit
+  fi
+fi
+if [[ "$result" =~ nauthorized\"\}$ ]];then
+  echo 'token错误, 请提供正确的token'
+  exit
+fi
+echo '提交失败,请联系管理员'

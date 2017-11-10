@@ -1,0 +1,6 @@
+username=$(git config user.name)
+comment=$1
+if [ ! -n "$1" ];then
+	comment=$username
+fi
+pt '$comment' release

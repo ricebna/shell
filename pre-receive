@@ -1,0 +1,23 @@
+#!/bin/sh
+#
+# An example hook script to make use of push options.
+# The example simply echoes all push options that start with 'echoback='
+# and rejects all pushes when the "reject" push option is used.
+#
+# To enable this hook, rename this file to "pre-receive".
+
+read oldrev newrev ref
+merge_hash=$(git log -1 --oneline  --pretty=format:"%p" $newrev)
+username=$(git log -1 --pretty=format:"%cn")
+br=$(echo $ref| cut -d \/ -f 3)
+if [ $br = "test" -o $br = "dev" -o $br = "release" -o $br = "pro" ];then
+	if [ $(echo $merge_hash|cut -d ' ' -f 1) = $(echo $merge_hash|cut -d ' ' -f 2) ]; 
+	then
+		echo "推送失败! 请合并开发分支后再次推送"
+		exit 1
+	elif [ $br = "pro" -a $GL_ID != user-1 ];then
+		echo "推送失败! 仅允许管理员推送pro分支"
+		exit 1
+	fi
+fi
+exit 0

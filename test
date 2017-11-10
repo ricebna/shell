@@ -1,0 +1,26 @@
+#!/bin/sh
+
+pwd
+echo -e '\n'
+str=$(pwd)
+#第三个/为分割字符串
+arr=(${str//// })
+
+# for i in ${arr[@]}
+# do
+	# echo $i
+# done
+# echo ${arr[${#arr[*]}-1]}
+
+#正则匹配
+ip='sdfsdf/sdfsdf/an.git/sdf'
+if [[ $ip =~ ([a-z]+)\.git ]]
+then
+    echo "Match"
+    echo ${BASH_REMATCH[1]}
+    echo ${BASH_REMATCH[2]}
+    echo ${BASH_REMATCH[3]}
+    echo ${BASH_REMATCH[4]}
+else
+    echo "Not match"
+fi

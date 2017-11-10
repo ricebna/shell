@@ -1,0 +1,89 @@
+#!/bin/sh
+
+backdir=/data/backup/master_mysql_back/
+master_host=172.16.20.200
+master_user=root
+master_password=weItO5a7FqgptO
+
+slave_host=127.0.0.1
+slave_user=root
+slave_password=weItO5a7FqgptO
+
+groups=(allianz xtx fafuli van axa)
+
+# 导出sql
+for v in ${groups[*]};
+do
+	################################################################################ group
+	mysqldump -u${master_user} -p${master_password} -h${master_host} --set-gtid-purged=OFF ${v}_mall home_benefits home_benefits_agreement home_benefits_group home_benefits_group_map home_benefits_list home_benefits_repository home_bg_agreement_map home_fields_rule home_plan_limit_agreement_map home_plan_limit_benefits_map home_product home_product_category home_product_change_log home_product_change_task home_product_fields_map home_product_plan home_product_plan_period home_product_plan_price home_product_repository home_surrender_rule home_product_material_templet home_product_plan_pricing home_period_pricing home_product_material_templet2 home_product_material_module home_zn_fields_group > ${backdir}${v}_mall.sql
+
+	mysqldump -u${master_user} -p${master_password} -h${master_host} --set-gtid-purged=OFF ${v}_claim home_accident home_accident_paper home_benefit_group home_benefit_paper home_category_paper home_item home_item_paper home_paper home_paper_category > ${backdir}${v}_claim.sql
+
+	mysqldump -u${master_user} -p${master_password} -h${master_host} --set-gtid-purged=OFF ${v}_console home_role > ${backdir}${v}_console.sql
+done
+
+################################################################################ not group
+mysqldump -u${master_user} -p${master_password} -h${master_host} --set-gtid-purged=OFF mall home_api_app home_api_group home_api_request_parameters home_api_return_parameters home_benefits_category home_fields_sort home_form_fields home_form_fields_content home_product_change_list > ${backdir}mall.sql
+
+mysqldump -u${master_user} -p${master_password} -h${master_host} --set-gtid-purged=OFF cvp home_rules home_service_product home_supplier home_product_appreciation home_information_variable > ${backdir}cvp.sql
+
+mysqldump -u${master_user} -p${master_password} -h${master_host} --set-gtid-purged=OFF dashboard home_module > ${backdir}dashboard.sql
+
+echo -e '\n backup success! \n'
+
+# 导入sql
+for v in ${groups[*]};
+do
+	# 使用EOF使其执行子shell, EOF结束符必须顶格
+	mysql -u${slave_user} -p${slave_password} -h${slave_host} --show-warnings=false <<EOF
+		use ${v}_claim;
+		source ${backdir}${v}_claim.sql;
+		use ${v}_console;
+		source ${backdir}${v}_console.sql;
+		use ${v}_mall;
+		source ${backdir}${v}_mall.sql;
+		exit
+EOF
+done
+
+mysql -u${slave_user} -p${slave_password} -h${slave_host} --show-warnings=false <<EOF
+		use cvp;
+		source ${backdir}cvp.sql;
+		use dashboard;
+		source ${backdir}dashboard.sql;
+		use mall;
+		source ${backdir}mall.sql;
+		exit
+EOF
+echo -e '\n import success! \n'
+
+# 重新启动主从同步
+function show_status(){
+        if [ ${1} = master ];then
+                mysql -uroot -p${master_password} -h${master_host} --show-warnings=false <<EOF
+                show master status\G;
+                exit
+EOF
+        else
+                mysql -uroot -p${slave_password} -h${slave_host} --show-warnings=false <<EOF
+                show slave status\G;
+                exit
+EOF
+        fi
+}
+
+master_status=$(show_status master|grep -E 'File:|Position:')  # grep筛选输出的行
+log_file=${master_status:19:16}  # 截取字符
+log_pos=${master_status:55:9}
+mysql -u${slave_user} -p${slave_password} -h${slave_host} --show-warnings=false <<EOF
+		stop slave;
+		change master to master_host='${master_host}',master_user='${master_user}',master_password='${master_password}',master_port=3306,master_log_file='${log_file}',master_log_pos=${log_pos};
+		flush logs;
+		start slave;
+		exit
+EOF
+sleep 2
+slave_status=$(show_status slave|grep -E ' Last_IO_Error:| Last_SQL_Error:| Slave_SQL_Running_State:| Slave_IO_Running:| Slave_SQL_Running:| Master_Log_File:| Read_Master_Log_Pos:')
+echo -e "\n slave status: \n $slave_status"  #使用双引号显示换行
+echo -e "\n master status: \n $master_status"
+echo -e '\n start slave success! \n'
