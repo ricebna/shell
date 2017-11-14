@@ -1,0 +1,30 @@
+#!/bin/bash
+path='/Users/chen/maat/coding/php/'
+branch='anlaa assistance campus claim common console cps dashboard dboadmin events mall partner portal relay static vanings xiaotuanxian fuli'
+for i in $branch
+do
+	cd $path$i
+	bb=$(git branch)
+	ex='x'
+	for b in $bb
+	do 
+		if [[ $b =~ 'fix' ]];
+		then
+			ex='y'
+		fi
+		if [[ $b = 'patch' ]];
+		then
+			ex='y'
+		fi
+		if [[ $b =~ 'fe' ]];
+		then
+			ex='y'
+		fi
+	done
+	if [[ $ex =~ 'y' ]];
+	then
+		echo -e "\n" 
+		echo $i
+		git branch
+	fi
+done
