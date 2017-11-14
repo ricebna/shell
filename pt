@@ -1,3 +1,5 @@
+#!/bin/bash
+
 git symbolic-ref --short -q HEAD >/dev/null 2>&1
 if [ $? -ne 0 ];then
 	echo '没有获取到当前仓库信息, 请检查当前所在目录'
