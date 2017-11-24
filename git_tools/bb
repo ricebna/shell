@@ -34,8 +34,13 @@ do
 		br=${br/  /''}
 		if [[ $br != 'pro' && $br != 'test' && $br != 'dev' && $br != 'release' && $br != 'master' ]];then
 			echo -e "\n$pr"
-			#echo -e "$branch"
-			git branch
+			branch=${branch/\*/''}
+			branch=${branch/ dev/''}
+			branch=${branch/ test/''}
+			branch=${branch/ release/''}
+			branch=${branch/ pro/''}
+			branch=${branch/ master/''}
+			echo -e "\033[32m$branch\033[0m"
 			break
 		fi
 	done

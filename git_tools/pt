@@ -2,22 +2,18 @@
 
 git symbolic-ref --short -q HEAD >/dev/null 2>&1
 if [ $? -ne 0 ];then
-	echo '没有获取到当前仓库信息, 请检查当前所在目录'
+	echo -e "\033[31m没有获取到当前仓库信息, 请检查当前所在目录\033[0m"
 	exit 1		
 fi
 branch=$(git symbolic-ref --short -q HEAD)
 
-if [[ $branch = 'test' || $branch = 'dev' || $branch = 'release' || $branch = 'pro' ]];then
-	echo '当前处于主要分支, 请切换到您的任务分支'
+if [[ $branch = 'test' || $branch = 'dev' || $branch = 'release' || $branch = 'pro' || $branch = 'master' ]];then
+	echo -e "\033[31m当前处于主要分支, 请切换到您的任务分支\033[0m"
 	git branch
 	exit 1
 fi
 
 username=$(git config user.name)
-comment=$1
-if [ ! -n "$1" ];then
-	comment=$username
-fi
 
 git add .
 git commit -m "$username"
@@ -26,14 +22,13 @@ target=$2
 if [ ! -n "$2" ];then
 	target=test
 fi
-
 git checkout $target
 if [[ $? != 0 ]];then
-	echo '当前仓库没有$target分支, 请检查'
+	echo -e "\033[31m当前仓库没有$target分支, 请检查\033[0m"
 	exit
 fi
 
-set i=0
+i=0
 while [[ $i < 3 ]]
 do
     git pull --rebase
@@ -44,17 +39,21 @@ do
 	let "i=i+1"
 done
 if [[ $result != 0 ]];then
-	echo 'pull拉取异常, 请检查'
+	echo -e "\033[31mpull拉取异常, 请检查\033[0m"
 	exit
 fi
 
+comment=$1
+if [ ! -n "$1" ];then
+	comment="Merge branch '$branch' into $target by $username"
+fi
 git merge $branch --no-ff -m "$comment"
 if [[ $? != 0 ]];then
-	echo '合并失败, 请检查'
+	echo -e "\033[31m合并失败, 请检查\033[0m"
 	exit
 fi
 
-set i=0
+i=0
 while [[ $i < 3 ]]
 do
     git push
@@ -65,8 +64,12 @@ do
 	let "i=i+1"
 done
 if [[ $result != 0 ]];then
-	echo 'push失败, 请重试'
+	echo -e "\033[31mpush失败, 请手动重试push命令\033[0m"
 	exit
 fi
 
-git checkout $branch
+if [ ! -n "$3" ];then
+	git checkout $branch
+else
+	git branch -D $branch
+fi

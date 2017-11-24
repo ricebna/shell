@@ -13,10 +13,10 @@ br=$(echo $ref| cut -d \/ -f 3)
 if [ $br = "test" -o $br = "dev" -o $br = "release" -o $br = "pro" ];then
 	if [ $(echo $merge_hash|cut -d ' ' -f 1) = $(echo $merge_hash|cut -d ' ' -f 2) ]; 
 	then
-		echo "推送失败! 请合并开发分支后再次推送"
+	    echo -e "\033[31m推送失败! 请合并开发分支后再次推送\033[0m"
 		exit 1
 	elif [ $br = "pro" -a $GL_ID != user-1 ];then
-		echo "推送失败! 仅允许管理员推送pro分支"
+	    echo -e "\033[31m推送失败! 仅允许管理员推送pro分支\033[0m"
 		exit 1
 	fi
 fi

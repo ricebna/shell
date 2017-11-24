@@ -1,0 +1,51 @@
+#!/bin/bash
+export LC_ALL=en_US.UTF-8
+
+read oldrev $newrev ref
+if [[ $(pwd) =~ ([a-z]+)\.git ]]
+then
+	project=${BASH_REMATCH[1]}
+else
+    echo -e "\033[31m更新服务器文件失败! 没有找到项目信息,请联系管理员\033[0m"
+	exit
+fi
+
+commit_dir="/data/merge/"
+svn_dir="/data/merge/$project"
+git_dir="/data/git_merge/$project"
+br=$(echo $ref| cut -d \/ -f 3)
+unset GIT_DIR
+
+if [ $br = "pro" -o $br = "test" -o $br = "dev" -o $br = "release" ];then
+
+	cd $svn_dir
+	sudo svn up >/dev/null 2>&1
+
+	cd $git_dir
+	git checkout $br >/dev/null 2>&1
+	sudo chown -R git:git /data/git_merge/*
+	git pull origin $br >/dev/null 2>&1
+
+	#rsync -avz --delete $git_dir/* --exclude '.git' $svn_dir/$br/ >/dev/null 2>&1
+	sudo cp -r $git_dir/* $svn_dir/$br/
+
+	#git log -m -1  --name-status --pretty=format:"本次hash: %H%n合并hash: %p%n提交帐号: %cn<%ce>%n提交时间: %cd%n提交信息: %s%n变更文件" --date=format:"%F %T" $newrev
+	if [[ $br = 'pro' ]];then
+		comment=$(git log -m -1  --pretty=format:"%s" release)
+	else
+	    comment=$(git log -m -1  --pretty=format:"%s")
+	fi
+	#name=$(git log -1 --pretty=format:%cn $newrev)
+	cd $commit_dir
+	sudo svn add --force $svn_dir/$br
+	svn_commit=$(sudo svn commit -m "$comment" $svn_dir/$br)
+	#echo $svn_commit|sed "s@Sending@\nSending@g"|sed "s@Adding@\nAdding@g"
+	echo -e "$svn_commit"
+	select=$(echo $svn_commit|grep "Committed")
+	if [[ x"$select" == x"" ]];then
+	    echo -e "\033[31m更新${br}服务器文件失败，请联系管理员\033[0m"
+	else
+	    echo -e "\033[32m更新${br}服务器文件成功!\033[0m"
+	fi
+
+fi
